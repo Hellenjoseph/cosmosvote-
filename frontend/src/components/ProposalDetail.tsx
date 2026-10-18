@@ -201,6 +201,32 @@ export function ProposalDetail({ proposal: p, decimals, walletAddress, adminAddr
         <h3 style={{ margin: '0 0 0.5rem' }}>{p.title}</h3>
         <p style={{ color: '#555' }}>{p.description}</p>
 
+        {/* Discussion link — shown only when discussion_url is a valid HTTPS URL */}
+        {p.discussion_url && /^https:\/\/.+/.test(p.discussion_url) && (
+          <p style={{ marginBottom: '1rem' }}>
+            <a
+              href={p.discussion_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.375rem 0.75rem',
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: 6,
+                color: '#1d4ed8',
+                textDecoration: 'none',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+              }}
+            >
+              💬 Discussion
+            </a>
+          </p>
+        )}
+
         {/* Details table */}
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem' }}>
           <tbody>
