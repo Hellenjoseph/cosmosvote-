@@ -806,7 +806,7 @@ impl GovernanceContract {
         }
 
         GovernanceStorage::set_pending_admin(&env, Some(&new_admin));
-        GovernanceEvents::admin_transfer_proposed(&env, &admin, &new_admin);
+        GovernanceEvents::admin_transfer_proposed(&env, &admin, &new_admin, env.ledger().timestamp());
         Ok(())
     }
 
@@ -845,7 +845,7 @@ impl GovernanceContract {
         let previous_admin = GovernanceStorage::admin(&env);
         GovernanceStorage::set_admin(&env, &pending_admin);
         GovernanceStorage::set_pending_admin(&env, None);
-        GovernanceEvents::admin_transfer_accepted(&env, &previous_admin, &pending_admin);
+        GovernanceEvents::admin_transfer_accepted(&env, &previous_admin, &pending_admin, env.ledger().timestamp());
         Ok(())
     }
 
