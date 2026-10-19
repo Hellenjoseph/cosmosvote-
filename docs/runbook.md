@@ -160,6 +160,20 @@ For the full error reference see [docs/errors.md](./errors.md).
 
 ---
 
+## Post-Incident Procedure
+
+After any incident that causes user-visible impact or requires an emergency response, open a postmortem within 48 hours of resolution.
+
+1. Copy the template: `cp docs/postmortem-template.md docs/postmortems/YYYY-MM-DD-<slug>.md`
+2. Fill in all sections (timeline, root cause, impact, action items, lessons learned)
+3. Open a PR for team review
+4. Track action items to completion
+
+See [docs/postmortem-template.md](./postmortem-template.md) for the full template and guidance.
+For a completed example (hypothetical RPC outage), see [docs/postmortems/2024-03-15-rpc-outage.md](./postmortems/2024-03-15-rpc-outage.md).
+
+---
+
 ## Deployment Procedure
 
 Use this section when deploying CosmosVote contracts to testnet or mainnet for the first time, or when upgrading to a new version.
