@@ -17,8 +17,8 @@ Required for contract development and the standard checks:
 
 Node.js 20 and npm are needed for frontend or backend work. Docker with the
 Docker Compose plugin is optional; it is used to run a local Stellar node.
-The Stellar CLI is optional unless you want to deploy and invoke contracts
-manually.
+The Stellar CLI is optional unless you want to follow the proposal tutorial
+and deploy or invoke contracts manually.
 
 Install Rust and the WebAssembly target:
 
@@ -26,6 +26,7 @@ Install Rust and the WebAssembly target:
 rustup toolchain install 1.78.0
 rustup default 1.78.0
 rustup target add wasm32-unknown-unknown
+rustup component add clippy rustfmt
 ```
 
 Install Node.js 20 using your preferred version manager, then verify the tools:
@@ -134,11 +135,12 @@ This optional exercise uses a local network and the Stellar CLI. It does not
 send transactions to testnet or mainnet. You need Docker Compose and the
 Stellar CLI installed; local contract calls do not require Stellar expertise.
 
-1. Start the local Soroban node and wait for it to become healthy:
+1. Start the local Soroban node and RPC proxy, then wait for the node to become
+   healthy:
 
    ```bash
-   docker compose up -d stellar-node
-   docker compose ps
+   docker compose up -d stellar-node rpc-proxy
+   docker compose ps stellar-node
    ```
 
 2. Create and fund a local CLI identity:
@@ -149,23 +151,54 @@ Stellar CLI installed; local contract calls do not require Stellar expertise.
    stellar keys address alice
    ```
 
-3. Build and deploy the token and governance contracts to the local network.
-   Follow the local deployment walkthrough, which includes the required
-   contract initialization steps:
-   [Local Soroban Contract Deployment](./local-deployment.md).
-
-4. Set the contract IDs printed by deployment in your shell. Replace the
-   placeholders with the IDs for the local network:
+3. Build the contracts and deploy and initialize the token. The initial supply
+   is assigned to `alice`:
 
    ```bash
-   export TOKEN_CONTRACT_ID=<local-token-contract-id>
-   export GOVERNANCE_CONTRACT_ID=<local-governance-contract-id>
+   make build
+   TOKEN_CONTRACT_ID=$(stellar contract deploy \
+     --wasm target/wasm32-unknown-unknown/release/cosmosvote_token.wasm \
+     --source alice \
+     --network local)
+
+   stellar contract invoke \
+     --id "$TOKEN_CONTRACT_ID" \
+     --source alice \
+     --network local \
+     -- initialize \
+     --admin alice \
+     --initial_supply 1000000000 \
+     --name CosmosVote \
+     --symbol VOTE \
+     --decimals 7
    ```
 
-5. Create a proposal. The proposer must have the minimum token balance
-   configured on the governance contract. `quorum` must be positive and no
-   larger than the token supply; `duration` must be between 60 and 2,592,000
-   seconds:
+4. Deploy and initialize governance with the token address. The zero minimum
+   balance and cooldown make this local example easy to repeat:
+
+   ```bash
+   GOVERNANCE_CONTRACT_ID=$(stellar contract deploy \
+     --wasm target/wasm32-unknown-unknown/release/cosmosvote_governance.wasm \
+     --source alice \
+     --network local)
+
+   stellar contract invoke \
+     --id "$GOVERNANCE_CONTRACT_ID" \
+     --source alice \
+     --network local \
+     -- initialize \
+     --admin alice \
+     --voting_token "$TOKEN_CONTRACT_ID" \
+     --min_proposal_balance 0 \
+     --proposal_cooldown 0 \
+     --min_quorum_bps 0 \
+     --restrict_admin_vote false \
+     --concentration_threshold_bps 0
+   ```
+
+5. Create a proposal. `alice` owns the initial token supply, so she meets the
+   proposer balance requirement. The quorum must be positive and no larger
+   than the total supply; duration must be from 60 to 2,592,000 seconds:
 
    ```bash
    stellar contract invoke \
@@ -177,24 +210,33 @@ Stellar CLI installed; local contract calls do not require Stellar expertise.
      --title "My first proposal" \
      --description "Document a small improvement for the community." \
      --quorum 1000 \
-     --duration 3600 \
-     --link 'null' \
-     --treasury_action 'null'
+     --duration 3600
    ```
 
-6. Copy the proposal ID from the invocation result. The contract records a
-   `proposal_created` event; event data and the proposal state can be inspected
-   with the tools described in [Contract State Inspection](./contract-state-inspection.md).
-   Stop the local node when finished:
+6. The create call returns the proposal ID (the first proposal is ID `0`).
+   Read it back and inspect the `proposal_created` event:
+
+   ```bash
+   stellar contract invoke \
+     --id "$GOVERNANCE_CONTRACT_ID" \
+     --source alice \
+     --network local \
+     -- get_proposal \
+     --proposal_id 0
+   ```
+
+   Event and state inspection options are also described in
+   [Contract State Inspection](./contract-state-inspection.md). Stop the local
+   services when finished:
 
    ```bash
    docker compose down
    ```
 
-This creates a proposal only; it does not execute or approve it. Contract
-deployment and invocation commands can vary between Stellar CLI releases. If
-the local CLI rejects an argument, check `stellar contract invoke --help` and
-the contract's `create_proposal` definition before proceeding.
+This creates a proposal only; it does not execute or approve it. The CLI may
+print a transaction result in addition to the contract return value. If an
+argument is rejected, compare the command with the current contract function
+signatures and check `stellar contract invoke --help`.
 
 ## Troubleshooting
 
