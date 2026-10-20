@@ -780,6 +780,18 @@ impl GovernanceContract {
             return Err(ContractError::QuorumExceedsSupply);
         }
 
+        // Quorum floor check (issue #53)
+        let min_quorum_bps = GovernanceStorage::min_quorum_bps(&env);
+        if min_quorum_bps > 0 {
+            let floor = supply
+                .checked_mul(min_quorum_bps as i128)
+                .and_then(|v| v.checked_div(10_000))
+                .ok_or(ContractError::ArithmeticOverflow)?;
+            if new_quorum < floor {
+                return Err(ContractError::QuorumBelowFloor);
+            }
+        }
+
         let mut proposal = GovernanceStorage::proposal(&env, proposal_id)
             .ok_or(ContractError::ProposalNotFound)?;
 
