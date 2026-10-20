@@ -247,6 +247,9 @@ impl GovernanceContract {
                 Some(a) => Vec::from_array(&env, [a]),
                 None => Vec::new(&env),
             },
+            choices: Vec::new(&env),
+            winning_choice: None,
+            cancellation_reason: None,
         };
 
         GovernanceStorage::set_proposal(&env, id, &proposal);
@@ -467,13 +470,19 @@ impl GovernanceContract {
         // i128::MAX (170_141_183_460_469_231_731_687_303_715_884_105_727). The token contract
         // enforces this via checked_add on mint, so total votes can never exceed total_supply.
         // checked_add is retained as a defence-in-depth guard.
-        match vote {
+        match &vote {
             Vote::Yes => proposal.votes_yes = proposal.votes_yes.checked_add(weight)
                 .ok_or(ContractError::ArithmeticOverflow)?,
             Vote::No => proposal.votes_no = proposal.votes_no.checked_add(weight)
                 .ok_or(ContractError::ArithmeticOverflow)?,
             Vote::Abstain => proposal.votes_abstain = proposal.votes_abstain.checked_add(weight)
                 .ok_or(ContractError::ArithmeticOverflow)?,
+            Vote::Choice(idx) => {
+                let current = GovernanceStorage::choice_votes(&env, proposal_id, *idx);
+                let updated = current.checked_add(weight)
+                    .ok_or(ContractError::ArithmeticOverflow)?;
+                GovernanceStorage::set_choice_votes(&env, proposal_id, *idx, updated);
+            }
         }
 
         GovernanceStorage::set_has_voted(&env, proposal_id, &voter, true);
@@ -526,6 +535,10 @@ impl GovernanceContract {
             Vote::Yes => proposal.votes_yes -= record.weight,
             Vote::No => proposal.votes_no -= record.weight,
             Vote::Abstain => proposal.votes_abstain -= record.weight,
+            Vote::Choice(idx) => {
+                let current = GovernanceStorage::choice_votes(&env, proposal_id, idx);
+                GovernanceStorage::set_choice_votes(&env, proposal_id, idx, current - record.weight);
+            }
         }
 
         GovernanceStorage::set_has_voted(&env, proposal_id, &voter, false);
@@ -571,6 +584,10 @@ impl GovernanceContract {
             Vote::Yes => proposal.votes_yes -= record.weight,
             Vote::No => proposal.votes_no -= record.weight,
             Vote::Abstain => proposal.votes_abstain -= record.weight,
+            Vote::Choice(idx) => {
+                let current = GovernanceStorage::choice_votes(&env, proposal_id, idx);
+                GovernanceStorage::set_choice_votes(&env, proposal_id, idx, current - record.weight);
+            }
         }
         match new_vote {
             Vote::Yes => proposal.votes_yes = proposal.votes_yes.checked_add(record.weight)
@@ -579,6 +596,12 @@ impl GovernanceContract {
                 .ok_or(ContractError::ArithmeticOverflow)?,
             Vote::Abstain => proposal.votes_abstain = proposal.votes_abstain.checked_add(record.weight)
                 .ok_or(ContractError::ArithmeticOverflow)?,
+            Vote::Choice(idx) => {
+                let current = GovernanceStorage::choice_votes(&env, proposal_id, idx);
+                let updated = current.checked_add(record.weight)
+                    .ok_or(ContractError::ArithmeticOverflow)?;
+                GovernanceStorage::set_choice_votes(&env, proposal_id, idx, updated);
+            }
         }
 
         let old_vote = record.vote.clone();
@@ -722,15 +745,6 @@ impl GovernanceContract {
 
         env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
         GovernanceEvents::contract_upgraded(&env, &new_wasm_hash);
-        Ok(())
-    }
-
-    /// Upgrade the governance contract code. Admin only.
-    pub fn upgrade(env: Env, admin: Address, new_wasm_hash: BytesN<32>) -> Result<(), ContractError> {
-        admin.require_auth();
-        Self::assert_admin(&env, &admin)?;
-
-        env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
         GovernanceEvents::upgraded(&env, &new_wasm_hash);
         Ok(())
     }
