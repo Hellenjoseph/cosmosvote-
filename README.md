@@ -11,8 +11,18 @@ CosmosVote enables DAOs, protocols, and communities to create proposals, cast to
 
 ---
 
+## Demo
+
+<!-- TODO: Replace this placeholder with an embedded GIF once a screen recording of the proposal lifecycle on testnet has been captured. See issue #97. -->
+> 🎬 **Video walkthrough coming soon** — connect wallet → create proposal → vote → finalise.
+>
+> For now, follow the written step-by-step guide: [docs/proposal-lifecycle-walkthrough.md](docs/proposal-lifecycle-walkthrough.md)
+
+---
+
 ## Table of Contents
 
+- [Demo](#demo)
 - [Project Overview](#project-overview)
 - [Architecture.](#architecture)
 - [Features](#features)
