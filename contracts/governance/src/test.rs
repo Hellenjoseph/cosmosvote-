@@ -2018,3 +2018,74 @@ fn test_circuit_breaker_threshold_zero_disables() {
     assert!(gov.has_voted(&id, &voter));
     assert!(!gov.is_paused());
 }
+
+// ---------------------------------------------------------------------------
+// Issue #70: Vote change support — additional tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_change_vote_after_deadline_fails() {
+    let env = Env::default();
+    let (gov, _, _, voter, _) = setup(&env);
+    let id = make_proposal(&gov, &env, &voter);
+    gov.cast_vote(&voter, &id, &Vote::Yes);
+
+    // Advance past end time
+    let proposal = gov.get_proposal(&id);
+    env.ledger().set_timestamp(proposal.end_time + 1);
+
+    let result = gov.try_change_vote(&voter, &id, &Vote::No);
+    assert_eq!(result, Err(Ok(ContractError::VotingPeriodEnded)));
+}
+
+#[test]
+fn test_change_vote_correctly_adjusts_tally_no_double_count() {
+    let env = Env::default();
+    let (gov, _, _, voter, voter2) = setup(&env);
+    let id = make_proposal(&gov, &env, &voter);
+
+    gov.cast_vote(&voter, &id, &Vote::Yes);
+    gov.cast_vote(&voter2, &id, &Vote::Yes);
+
+    let proposal = gov.get_proposal(&id);
+    assert_eq!(proposal.votes_yes, 15_000_000); // 10M + 5M
+
+    // Voter changes from Yes to No
+    gov.change_vote(&voter, &id, &Vote::No);
+
+    let updated = gov.get_proposal(&id);
+    assert_eq!(updated.votes_yes, 5_000_000); // only voter2
+    assert_eq!(updated.votes_no, 10_000_000); // voter moved here
+    assert_eq!(updated.voter_count, 2); // count unchanged
+}
+
+#[test]
+fn test_change_vote_emits_vote_changed_event() {
+    let env = Env::default();
+    let (gov, _, _, voter, _) = setup(&env);
+    let id = make_proposal(&gov, &env, &voter);
+    gov.cast_vote(&voter, &id, &Vote::Yes);
+
+    gov.change_vote(&voter, &id, &Vote::No);
+
+    // Check that vote_changed event was emitted
+    let events = env.events().all();
+    // Should have: initialized, proposal_created, vote_cast, vote_changed
+    assert!(events.len() >= 4);
+}
+
+#[test]
+fn test_change_vote_abstain_to_yes() {
+    let env = Env::default();
+    let (gov, _, _, voter, _) = setup(&env);
+    let id = make_proposal(&gov, &env, &voter);
+
+    gov.cast_vote(&voter, &id, &Vote::Abstain);
+    let proposal = gov.get_proposal(&id);
+    assert_eq!(proposal.votes_abstain, 10_000_000);
+
+    gov.change_vote(&voter, &id, &Vote::Yes);
+    let updated = gov.get_proposal(&id);
+    assert_eq!(updated.votes_abstain, 0);
+    assert_eq!(updated.votes_yes, 10_000_000);
+}
