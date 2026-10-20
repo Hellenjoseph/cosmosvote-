@@ -2018,3 +2018,151 @@ fn test_circuit_breaker_threshold_zero_disables() {
     assert!(gov.has_voted(&id, &voter));
     assert!(!gov.is_paused());
 }
+
+// ---------------------------------------------------------------------------
+// Issue #53: Quorum floor enforcement in update_quorum
+// ---------------------------------------------------------------------------
+
+/// Helper: set up governance with a 10% quorum floor (1000 bps).
+fn setup_with_quorum_floor(env: &Env) -> (GovernanceContractClient<'_>, TokenContractClient<'_>, Address, Address) {
+    env.mock_all_auths();
+    let admin = Address::generate(env);
+    let voter = Address::generate(env);
+
+    let token_id = env.register(TokenContract, ());
+    let token = TokenContractClient::new(env, &token_id);
+    token.initialize(
+        &admin,
+        &1_000_000i128,
+        &String::from_str(env, "CosmosVote"),
+        &String::from_str(env, "VOTE"),
+        &7u32,
+    );
+    token.mint(&admin, &voter, &1_000_000i128);
+
+    let gov_id = env.register(GovernanceContract, ());
+    let gov = GovernanceContractClient::new(env, &gov_id);
+    gov.initialize(&admin, &token_id, &0i128, &0u64, &1000u32, &false, &None, &0u32);
+
+    (gov, token, admin, voter)
+}
+
+#[test]
+fn test_create_proposal_quorum_exactly_at_floor_passes() {
+    let env = Env::default();
+    let (gov, _token, _admin, voter) = setup_with_quorum_floor(&env);
+
+    // 10% of 1M = 100_000. Exactly at floor should pass.
+    let id = gov.create_proposal(
+        &voter,
+        &String::from_str(&env, "At Floor"),
+        &String::from_str(&env, "Quorum exactly at floor"),
+        &100_000i128,
+        &3600u64,
+        &None,
+        &None,
+    );
+    assert_eq!(id, 0u64);
+}
+
+#[test]
+fn test_create_proposal_quorum_just_below_floor_rejected() {
+    let env = Env::default();
+    let (gov, _token, _admin, voter) = setup_with_quorum_floor(&env);
+
+    // 99_999 is just below the 100_000 floor
+    let result = gov.try_create_proposal(
+        &voter,
+        &String::from_str(&env, "Below Floor"),
+        &String::from_str(&env, "Quorum just below floor"),
+        &99_999i128,
+        &3600u64,
+        &None,
+        &None,
+    );
+    assert_eq!(result, Err(Ok(ContractError::QuorumBelowFloor)));
+}
+
+#[test]
+fn test_create_proposal_quorum_just_above_floor_passes() {
+    let env = Env::default();
+    let (gov, _token, _admin, voter) = setup_with_quorum_floor(&env);
+
+    // 100_001 is just above the 100_000 floor
+    let id = gov.create_proposal(
+        &voter,
+        &String::from_str(&env, "Above Floor"),
+        &String::from_str(&env, "Quorum just above floor"),
+        &100_001i128,
+        &3600u64,
+        &None,
+        &None,
+    );
+    assert_eq!(id, 0u64);
+}
+
+#[test]
+fn test_update_quorum_below_floor_rejected() {
+    let env = Env::default();
+    let (gov, _token, admin, voter) = setup_with_quorum_floor(&env);
+
+    // Create proposal with quorum at floor
+    let id = gov.create_proposal(
+        &voter,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, "Test"),
+        &100_000i128,
+        &3600u64,
+        &None,
+        &None,
+    );
+
+    // Try to update quorum below floor — should fail
+    let result = gov.try_update_quorum(&admin, &id, &50_000i128);
+    assert_eq!(result, Err(Ok(ContractError::QuorumBelowFloor)));
+}
+
+#[test]
+fn test_update_quorum_at_floor_passes() {
+    let let_env = Env::default();
+    let env = &let_env;
+    let (gov, _token, admin, voter) = setup_with_quorum_floor(env);
+
+    // Create proposal with quorum above floor
+    let id = gov.create_proposal(
+        &voter,
+        &String::from_str(env, "Test"),
+        &String::from_str(env, "Test"),
+        &200_000i128,
+        &3600u64,
+        &None,
+        &None,
+    );
+
+    // Update to exactly the floor — should pass
+    gov.update_quorum(&admin, &id, &100_000i128);
+    let proposal = gov.get_proposal(&id);
+    assert_eq!(proposal.quorum, 100_000i128);
+}
+
+#[test]
+fn test_update_quorum_above_floor_passes() {
+    let let_env = Env::default();
+    let env = &let_env;
+    let (gov, _token, admin, voter) = setup_with_quorum_floor(env);
+
+    let id = gov.create_proposal(
+        &voter,
+        &String::from_str(env, "Test"),
+        &String::from_str(env, "Test"),
+        &200_000i128,
+        &3600u64,
+        &None,
+        &None,
+    );
+
+    // Update to above floor — should pass
+    gov.update_quorum(&admin, &id, &150_000i128);
+    let proposal = gov.get_proposal(&id);
+    assert_eq!(proposal.quorum, 150_000i128);
+}
