@@ -2018,3 +2018,94 @@ fn test_circuit_breaker_threshold_zero_disables() {
     assert!(gov.has_voted(&id, &voter));
     assert!(!gov.is_paused());
 }
+
+// ---------------------------------------------------------------------------
+// Issue #68: Validate treasury action amounts are non-zero
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_treasury_action_zero_amount_rejected() {
+    let env = Env::default();
+    let (gov, _token, _admin, voter, _) = setup(&env);
+
+    let action = TreasuryAction {
+        recipient: Address::generate(&env),
+        amount: 0i128,
+        asset: TreasuryAsset::Native,
+    };
+
+    let result = gov.try_create_proposal(
+        &voter,
+        &String::from_str(&env, "Zero Treasury"),
+        &String::from_str(&env, "Treasury action with zero amount"),
+        &1_000_000i128,
+        &604_800u64,
+        &None,
+        &Some(action),
+    );
+    assert_eq!(result, Err(Ok(ContractError::InvalidTreasuryAmount)));
+}
+
+#[test]
+fn test_treasury_action_negative_amount_rejected() {
+    let env = Env::default();
+    let (gov, _token, _admin, voter, _) = setup(&env);
+
+    let action = TreasuryAction {
+        recipient: Address::generate(&env),
+        amount: -100i128,
+        asset: TreasuryAsset::Native,
+    };
+
+    let result = gov.try_create_proposal(
+        &voter,
+        &String::from_str(&env, "Negative Treasury"),
+        &String::from_str(&env, "Treasury action with negative amount"),
+        &1_000_000i128,
+        &604_800u64,
+        &None,
+        &Some(action),
+    );
+    assert_eq!(result, Err(Ok(ContractError::InvalidTreasuryAmount)));
+}
+
+#[test]
+fn test_treasury_action_positive_amount_accepted() {
+    let env = Env::default();
+    let (gov, _token, _admin, voter, _) = setup(&env);
+
+    let action = TreasuryAction {
+        recipient: Address::generate(&env),
+        amount: 500i128,
+        asset: TreasuryAsset::Native,
+    };
+
+    let id = gov.create_proposal(
+        &voter,
+        &String::from_str(&env, "Valid Treasury"),
+        &String::from_str(&env, "Treasury action with positive amount"),
+        &1_000_000i128,
+        &604_800u64,
+        &None,
+        &Some(action),
+    );
+    assert_eq!(id, 0u64);
+}
+
+#[test]
+fn test_treasury_action_none_accepted() {
+    let env = Env::default();
+    let (gov, _token, _admin, voter, _) = setup(&env);
+
+    // No treasury action should work fine
+    let id = gov.create_proposal(
+        &voter,
+        &String::from_str(&env, "No Treasury"),
+        &String::from_str(&env, "Proposal without treasury action"),
+        &1_000_000i128,
+        &604_800u64,
+        &None,
+        &None,
+    );
+    assert_eq!(id, 0u64);
+}
