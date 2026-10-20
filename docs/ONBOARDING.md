@@ -1,144 +1,214 @@
-# Contributor Onboarding Guide
+# First-Time Contributor Onboarding
 
-Welcome to CosmosVote! This guide walks new contributors through setting up the project, understanding the codebase, and making their first contribution.
+Welcome to CosmosVote! This guide takes you from a fresh checkout to running
+the project's checks and making a first contribution. You do not need prior
+Stellar or Soroban experience to run the tests or work on most issues.
 
----
+## Prerequisites
 
-## 1. Repo Layout
+Required for contract development and the standard checks:
 
-```
-cosmosvote/
-├── contracts/
-│   ├── governance/     # On-chain governance logic (proposals, voting, finalization)
-│   └── token/          # SEP-41 governance token (balances, mint, burn, allowances)
-├── docs/               # Architecture docs, ADRs, security, examples
-├── frontend/           # React + Vite proposal browser UI
-├── scripts/            # Deploy and test helper shell scripts
-├── config/             # Network configs: local.toml, testnet.toml, mainnet.toml
-├── .github/workflows/  # CI pipelines (fmt, lint, test, build, coverage)
-├── Makefile            # Common dev targets
-├── CONTRIBUTING.md     # Full contribution guidelines
-└── README.md
-```
+| Tool | Version | Purpose |
+| --- | --- | --- |
+| Git | Recent version | Clone the repository and work with branches |
+| Rust and Cargo | Rust 1.78.0 (the version used by CI) | Build and test the contracts |
+| `wasm32-unknown-unknown` target | Rust target | Build deployable contracts |
+| GNU Make | Any recent version | Run the repository's common commands |
 
-### Key Packages
+Node.js 20 and npm are needed for frontend or backend work. Docker with the
+Docker Compose plugin is optional; it is used to run a local Stellar node.
+The Stellar CLI is optional unless you want to deploy and invoke contracts
+manually.
 
-| Package | Path | Purpose |
-|---------|------|---------|
-| `cosmosvote-governance` | `contracts/governance/` | Core proposal & voting contract |
-| `cosmosvote-token` | `contracts/token/` | SEP-41 governance token contract |
-| Frontend | `frontend/` | React UI for browsing proposals |
-
----
-
-## 2. Local Setup
-
-### Prerequisites
-
-| Tool | Version | Install |
-|------|---------|---------|
-| Rust | 1.75+ | https://rustup.rs |
-| wasm32 target | — | `rustup target add wasm32-unknown-unknown` |
-| Stellar CLI | 22+ | https://stellar.org/cli (optional, for deploy) |
-| Docker | any | https://docker.com (optional) |
-
-### Steps
+Install Rust and the WebAssembly target:
 
 ```bash
-# 1. Fork on GitHub, then clone your fork
+rustup toolchain install 1.78.0
+rustup default 1.78.0
+rustup target add wasm32-unknown-unknown
+```
+
+Install Node.js 20 using your preferred version manager, then verify the tools:
+
+```bash
+rustc --version
+cargo --version
+rustup target list --installed
+make --version
+node --version
+npm --version
+```
+
+## Get the code and set up your environment
+
+Fork `mercyJJ/cosmosvote` on GitHub, then clone your fork. Add the upstream
+repository so you can update your local `main` branch:
+
+```bash
 git clone https://github.com/<your-username>/cosmosvote.git
 cd cosmosvote
-
-# 2. Add the upstream remote
 git remote add upstream https://github.com/mercyJJ/cosmosvote.git
+git remote -v
+```
 
-# 3. Add WASM target
-rustup target add wasm32-unknown-unknown
+The contract tests run in a local Soroban test environment and do not require a
+wallet, RPC endpoint, deployed contract, secret key, or Docker. Do not put a
+real Stellar secret key in a tracked file. If you later need the optional local
+network, see [Local Soroban Contract Deployment](./local-deployment.md).
 
-# 4. Build and test to verify your setup
+To work on the frontend or backend, install its locked dependencies:
+
+```bash
+cd frontend && npm ci
+cd ../backend && npm ci
+cd ..
+```
+
+## Run your first tests
+
+From the repository root, run the Rust unit and property tests:
+
+```bash
 make test
-make build
 ```
 
-All 60+ tests should pass with no errors.
-
----
-
-## 3. First-Issue Workflow
-
-```
-Find issue → comment to claim it → branch → change → test → PR
-```
-
-1. Browse [open issues](https://github.com/mercyJJ/cosmosvote/issues) filtered by `good first issue` or `documentation`.
-2. Comment on the issue to let maintainers know you're working on it.
-3. Pull the latest main and create a focused branch:
+You can run a smaller package-specific test suite while iterating:
 
 ```bash
-git checkout main
-git pull upstream main
-git checkout -b <type>/<short-description>-<issue-number>
-# e.g. docs/update-storage-diagram-312
-#      fix/quorum-edge-case-298
-#      feat/proposal-delegation-305
+cargo test -p cosmosvote-governance --features testutils
+cargo test -p cosmosvote-token --features testutils
 ```
 
-4. Make your changes, keeping the scope tight to the issue.
-5. Run the full check suite before pushing:
+For frontend or backend changes, also run the relevant JavaScript tests:
 
 ```bash
-make fmt       # auto-format
-make lint      # clippy
-make test      # all unit + property tests
-make build     # WASM compilation check
+cd frontend && npm test -- --run
+cd ../backend && npm test -- --runInBand
 ```
 
-6. Commit using [Conventional Commits](https://www.conventionalcommits.org/):
+The first Cargo run may take several minutes while dependencies compile. A
+successful run ends with a test summary and exit status `0`.
+
+## Run your first lint and build checks
+
+Run the Rust linter and formatting check from the repository root:
 
 ```bash
-git commit -m "fix: prevent quorum bypass on abstain-only votes (#298)"
+make lint
+make fmt-check
 ```
 
-7. Push and open a PR against `main` in the upstream repo, linking the issue:
+For frontend changes, run:
 
 ```bash
-git push -u origin <your-branch>
-gh pr create --repo mercyJJ/cosmosvote --base main \
-  --title "fix: prevent quorum bypass (#298)" \
-  --body "Closes #298"
+cd frontend
+npm run lint
+npm run type-check
 ```
 
----
-
-## 4. Testing Commands
+For backend changes, run:
 
 ```bash
-make test                                        # all tests
-cargo test -p cosmosvote-governance --features testutils  # governance only
-cargo test -p cosmosvote-token --features testutils       # token only
-cargo test prop_ --all --features testutils               # property-based tests
-make coverage                                    # HTML coverage report → coverage/
+cd backend
+npm run build
 ```
 
----
+To confirm contracts compile to WebAssembly, run `make build` from the
+repository root. Run checks relevant to your change before opening a PR; CI
+will run the project checks again.
 
-## 5. Useful Docs
+## Find a good first issue
 
-| Doc | Purpose |
-|-----|---------|
-| [GETTING_STARTED.md](./GETTING_STARTED.md) | Build, deploy, and interact with contracts |
-| [lifecycle.md](./lifecycle.md) | Proposal state machine |
-| [storage.md](./storage.md) | Soroban storage tier strategy |
-| [errors.md](./errors.md) | Full error reference |
-| [faq.md](./faq.md) | Common questions |
-| [docs/adr/](./adr/) | Architecture Decision Records |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | Full contribution guidelines |
-| [SECURITY.md](../SECURITY.md) | Vulnerability disclosure |
+Browse [open issues labeled `good first issue`](https://github.com/mercyJJ/cosmosvote/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+If there are no matching issues, look for open issues labeled `documentation`
+or `help wanted`. Read the issue and any linked design notes, then leave a
+comment asking to work on it before starting. Maintainers can confirm that the
+issue is still available and clarify its scope.
 
----
+For the branch, commit, and pull request conventions, follow
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
-## 6. Getting Help
+## Create a proposal end-to-end
 
-- Open a [GitHub Discussion](https://github.com/mercyJJ/cosmosvote/discussions) for questions.
-- Review existing issues and PRs for context on ongoing work.
-- Check `docs/adr/` for rationale behind key design decisions.
+This optional exercise uses a local network and the Stellar CLI. It does not
+send transactions to testnet or mainnet. You need Docker Compose and the
+Stellar CLI installed; local contract calls do not require Stellar expertise.
+
+1. Start the local Soroban node and wait for it to become healthy:
+
+   ```bash
+   docker compose up -d stellar-node
+   docker compose ps
+   ```
+
+2. Create and fund a local CLI identity:
+
+   ```bash
+   stellar keys generate --global alice --network local
+   stellar keys fund alice --network local
+   stellar keys address alice
+   ```
+
+3. Build and deploy the token and governance contracts to the local network.
+   Follow the local deployment walkthrough, which includes the required
+   contract initialization steps:
+   [Local Soroban Contract Deployment](./local-deployment.md).
+
+4. Set the contract IDs printed by deployment in your shell. Replace the
+   placeholders with the IDs for the local network:
+
+   ```bash
+   export TOKEN_CONTRACT_ID=<local-token-contract-id>
+   export GOVERNANCE_CONTRACT_ID=<local-governance-contract-id>
+   ```
+
+5. Create a proposal. The proposer must have the minimum token balance
+   configured on the governance contract. `quorum` must be positive and no
+   larger than the token supply; `duration` must be between 60 and 2,592,000
+   seconds:
+
+   ```bash
+   stellar contract invoke \
+     --id "$GOVERNANCE_CONTRACT_ID" \
+     --source alice \
+     --network local \
+     -- create_proposal \
+     --proposer alice \
+     --title "My first proposal" \
+     --description "Document a small improvement for the community." \
+     --quorum 1000 \
+     --duration 3600 \
+     --link 'null' \
+     --treasury_action 'null'
+   ```
+
+6. Copy the proposal ID from the invocation result. The contract records a
+   `proposal_created` event; event data and the proposal state can be inspected
+   with the tools described in [Contract State Inspection](./contract-state-inspection.md).
+   Stop the local node when finished:
+
+   ```bash
+   docker compose down
+   ```
+
+This creates a proposal only; it does not execute or approve it. Contract
+deployment and invocation commands can vary between Stellar CLI releases. If
+the local CLI rejects an argument, check `stellar contract invoke --help` and
+the contract's `create_proposal` definition before proceeding.
+
+## Troubleshooting
+
+| Error or symptom | What to try |
+| --- | --- |
+| `rustup: command not found` | Install Rust with [rustup](https://rustup.rs), then open a new terminal so its environment is loaded. |
+| `can't find crate for \`core\`` or target unavailable | Run `rustup target add wasm32-unknown-unknown` using the active toolchain. |
+| Cargo cannot download a dependency | Check network/proxy access, then retry `cargo test`; use `cargo test --locked` if the lockfile was changed unexpectedly. |
+| `make: command not found` | Install GNU Make, or run the corresponding Cargo command directly (for example, `cargo test --all --features testutils`). |
+| `npm ci` fails or reports a lockfile mismatch | Confirm Node.js 20 is active and that `package-lock.json` is committed; do not replace `npm ci` with an uncommitted lockfile update. |
+| Frontend reports a missing/invalid contract ID | Frontend contract addresses are deployment configuration. Use a matching network deployment and check `frontend/.env.example` and `docs/environment-variables.md`. |
+| Docker reports a port conflict or the node never becomes healthy | Check whether port 8001 is in use with `docker compose ps`, then inspect `docker compose logs stellar-node`. |
+| `stellar keys fund` or invocation fails | Confirm `--network local` is selected and the local node is healthy; do not use a testnet or mainnet identity for this exercise. |
+
+If a problem remains, include the exact command, full error output, operating
+system, and relevant tool versions when asking in
+[GitHub Discussions](https://github.com/mercyJJ/cosmosvote/discussions).
