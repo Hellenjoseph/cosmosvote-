@@ -225,6 +225,13 @@ impl GovernanceContract {
             }
         }
 
+        // Validate treasury action amount is non-zero (issue #68)
+        if let Some(ref action) = treasury_action {
+            if action.amount <= 0 {
+                return Err(ContractError::InvalidTreasuryAmount);
+            }
+        }
+
         let now = env.ledger().timestamp();
         let snapshot_ledger = env.ledger().sequence();
         let id = GovernanceStorage::proposal_count(&env);
