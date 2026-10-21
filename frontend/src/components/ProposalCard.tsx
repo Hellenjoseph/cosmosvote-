@@ -92,6 +92,31 @@ export function ProposalCard({ proposal: p, decimals, onClick }: Props) {
   const color = STATE_COLORS[p.state];
   const pct = quorumPct(p);
 
+  // Controls the 2-second copy-confirmation toast
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyLink = useCallback(
+    async (e: React.MouseEvent) => {
+      // Prevent the card's onClick from opening the detail view
+      e.stopPropagation();
+      const url = buildProposalUrl(p.id);
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        // Fallback: create a temporary input for environments without clipboard API
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    },
+    [p.id],
+  );
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -115,6 +140,7 @@ export function ProposalCard({ proposal: p, decimals, onClick }: Props) {
         background: 'var(--bg-card)',
         transition: 'box-shadow 0.15s, border-color 0.15s',
         outline: 'none',
+        position: 'relative',
       }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 4px 12px ${color}44`)}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
@@ -122,13 +148,66 @@ export function ProposalCard({ proposal: p, decimals, onClick }: Props) {
       onBlur={e => (e.currentTarget.style.boxShadow = 'none')}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)' }}>#{String(p.id)} — {p.title}</h3>
-        <span style={{ background: color, color: '#fff', borderRadius: 4, padding: '2px 8px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-          {p.state}
-        </span>
+        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)' }}>
+          #{String(p.id)} — {p.title}
+        </h3>
+
+        {/* Row: state badge + copy-link button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+          <span
+            style={{
+              background: color,
+              color: '#fff',
+              borderRadius: 4,
+              padding: '2px 8px',
+              fontSize: '0.75rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {p.state}
+          </span>
+
+          {/* Copy link button — Issue #30 */}
+          <div style={{ position: 'relative' }}>
+            <CopyToast visible={copied} />
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              onKeyDown={e => {
+                // Prevent card activation when pressing Enter/Space on this button
+                e.stopPropagation();
+              }}
+              aria-label={`Copy link to proposal #${p.id}`}
+              title="Copy proposal link"
+              style={{
+                background: 'none',
+                border: '1px solid var(--border-color, #334155)',
+                borderRadius: 4,
+                padding: '2px 6px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                lineHeight: 1.4,
+                color: 'var(--text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              🔗
+            </button>
+          </div>
+        </div>
       </div>
 
-      <p style={{ margin: '0.5rem 0', color: 'var(--text-secondary)', fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <p
+        style={{
+          margin: '0.5rem 0',
+          color: 'var(--text-secondary)',
+          fontSize: '0.875rem',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
         {p.description}
       </p>
 
@@ -143,10 +222,19 @@ export function ProposalCard({ proposal: p, decimals, onClick }: Props) {
 
       {/* Quorum progress bar */}
       <div style={{ background: 'var(--border-color)', borderRadius: 4, height: 6 }}>
-        <div style={{ background: color, width: `${pct}%`, height: '100%', borderRadius: 4, transition: 'width 0.3s' }} />
+        <div
+          style={{
+            background: color,
+            width: `${pct}%`,
+            height: '100%',
+            borderRadius: 4,
+            transition: 'width 0.3s',
+          }}
+        />
       </div>
       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
-        {pct}% of quorum · ✅ {formatTokenAmount(p.votes_yes, decimals)} · ❌ {formatTokenAmount(p.votes_no, decimals)} · ⬜ {formatTokenAmount(p.votes_abstain, decimals)}
+        {pct}% of quorum · ✅ {formatTokenAmount(p.votes_yes, decimals)} · ❌{' '}
+        {formatTokenAmount(p.votes_no, decimals)} · ⬜ {formatTokenAmount(p.votes_abstain, decimals)}
       </div>
     </article>
   );
