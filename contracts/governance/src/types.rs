@@ -47,6 +47,7 @@ pub enum ContractError {
     NotProposer         = 35,
     VotesAlreadyCast    = 36,
     InvalidLink         = 37,
+    InvalidChoice       = 38,
 
     // Contract state
     ContractPaused      = 40,
@@ -57,6 +58,7 @@ pub enum ContractError {
 
     // Execution
     ExecutionFailed     = 60,
+    InvalidTreasuryAmount = 61,
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +134,11 @@ pub struct Proposal {
     pub voter_count: u32,
     /// Optional treasury disbursement to execute on proposal execution.
     pub treasury_action: Vec<TreasuryAction>,
-    /// Optional reason provided when the proposal was cancelled.
+    /// Multi-choice options (empty for Yes/No/Abstain proposals).
+    pub choices: Vec<String>,
+    /// Winning choice index after finalisation (multi-choice only).
+    pub winning_choice: Option<u32>,
+    /// Reason for cancellation (admin-cancelled proposals only).
     pub cancellation_reason: Option<String>,
 }
 
