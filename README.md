@@ -11,8 +11,18 @@ CosmosVote enables DAOs, protocols, and communities to create proposals, cast to
 
 ---
 
+## Demo
+
+<!-- TODO: Replace this placeholder with an embedded GIF once a screen recording of the proposal lifecycle on testnet has been captured. See issue #97. -->
+> 🎬 **Video walkthrough coming soon** — connect wallet → create proposal → vote → finalise.
+>
+> For now, follow the written step-by-step guide: [docs/proposal-lifecycle-walkthrough.md](docs/proposal-lifecycle-walkthrough.md)
+
+---
+
 ## Table of Contents
 
+- [Demo](#demo)
 - [Project Overview](#project-overview)
 - [Architecture.](#architecture)
 - [Features](#features)
@@ -108,6 +118,7 @@ sequenceDiagram
 | Events | Every state transition emits an on-chain event |
 | Tie handling | Tie (yes == no) results in rejection |
 | Admin vote restriction | When `restrict_admin_vote=true`, admin cannot vote on **any** proposal |
+| Voter count cap | `MAX_VOTER_COUNT = 10 000` — `cast_vote` returns `MaxVotersReached` when exceeded |
 
 ---
 
@@ -123,6 +134,7 @@ sequenceDiagram
 - **Admin controls** — pause/unpause, update quorum, transfer admin privileges
 - **Proposal cooldown** — optional rate limiting per proposer
 - **Minimum balance requirement** — optional minimum tokens to create proposals
+- **Voter count cap** — `MAX_VOTER_COUNT = 10 000` per proposal; prevents gas exhaustion in any future bulk-voter operation
 
 ---
 
@@ -646,6 +658,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). Quick checklist:
 - [Architecture Decision Records](./docs/adr/)
 - [Security Documentation](./docs/security/)
 - [Notification Service](./docs/notification-service.md)
+- [Notification Service Architecture & Sequence Diagrams](./docs/architecture-notification.md)
 - [Gas Budgeting Guide](./docs/gas-budgeting.md)
 
 ---
