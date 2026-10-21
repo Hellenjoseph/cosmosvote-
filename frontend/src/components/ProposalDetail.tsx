@@ -552,6 +552,17 @@ export function ProposalDetail({ proposal: p, decimals, walletAddress, adminAddr
           </div>
         )}
 
+        {/* ── Vote Simulation Preview (Active proposals only) ── */}
+        {/* Rendered for Active proposals regardless of wallet connection so
+            users can see an estimate before connecting. When walletAddress is
+            present the preview reflects the user's pending vote in real time. */}
+        {isProposalActive && walletAddress && hasVoted === false && (
+          <VoteSimulationPreview
+            proposalId={Number(p.id)}
+            walletAddress={walletAddress}
+          />
+        )}
+
         {/* Already voted confirmation (when loaded from chain, not just submitted) */}
         {walletAddress && hasVoted && !voteConfirmation && voteRecord && (
           <div
