@@ -239,6 +239,13 @@ impl GovernanceContract {
             }
         }
 
+        // Validate treasury action amount is non-zero (issue #68)
+        if let Some(ref action) = treasury_action {
+            if action.amount <= 0 {
+                return Err(ContractError::InvalidTreasuryAmount);
+            }
+        }
+
         let now = env.ledger().timestamp();
         let snapshot_ledger = env.ledger().sequence();
         let id = GovernanceStorage::proposal_count(&env);
@@ -261,6 +268,9 @@ impl GovernanceContract {
                 Some(a) => Vec::from_array(&env, [a]),
                 None => Vec::new(&env),
             },
+            choices: Vec::new(&env),
+            winning_choice: None,
+            cancellation_reason: None,
         };
 
         GovernanceStorage::set_proposal(&env, id, &proposal);
@@ -481,13 +491,19 @@ impl GovernanceContract {
         // i128::MAX (170_141_183_460_469_231_731_687_303_715_884_105_727). The token contract
         // enforces this via checked_add on mint, so total votes can never exceed total_supply.
         // checked_add is retained as a defence-in-depth guard.
-        match vote {
+        match &vote {
             Vote::Yes => proposal.votes_yes = proposal.votes_yes.checked_add(weight)
                 .ok_or(ContractError::ArithmeticOverflow)?,
             Vote::No => proposal.votes_no = proposal.votes_no.checked_add(weight)
                 .ok_or(ContractError::ArithmeticOverflow)?,
             Vote::Abstain => proposal.votes_abstain = proposal.votes_abstain.checked_add(weight)
                 .ok_or(ContractError::ArithmeticOverflow)?,
+            Vote::Choice(idx) => {
+                let current = GovernanceStorage::choice_votes(&env, proposal_id, *idx);
+                let updated = current.checked_add(weight)
+                    .ok_or(ContractError::ArithmeticOverflow)?;
+                GovernanceStorage::set_choice_votes(&env, proposal_id, *idx, updated);
+            }
         }
 
         GovernanceStorage::set_has_voted(&env, proposal_id, &voter, true);
@@ -549,6 +565,10 @@ impl GovernanceContract {
             Vote::Yes => proposal.votes_yes -= record.weight,
             Vote::No => proposal.votes_no -= record.weight,
             Vote::Abstain => proposal.votes_abstain -= record.weight,
+            Vote::Choice(idx) => {
+                let current = GovernanceStorage::choice_votes(&env, proposal_id, idx);
+                GovernanceStorage::set_choice_votes(&env, proposal_id, idx, current - record.weight);
+            }
         }
 
         GovernanceStorage::set_has_voted(&env, proposal_id, &voter, false);
@@ -594,6 +614,10 @@ impl GovernanceContract {
             Vote::Yes => proposal.votes_yes -= record.weight,
             Vote::No => proposal.votes_no -= record.weight,
             Vote::Abstain => proposal.votes_abstain -= record.weight,
+            Vote::Choice(idx) => {
+                let current = GovernanceStorage::choice_votes(&env, proposal_id, idx);
+                GovernanceStorage::set_choice_votes(&env, proposal_id, idx, current - record.weight);
+            }
         }
         match new_vote {
             Vote::Yes => proposal.votes_yes = proposal.votes_yes.checked_add(record.weight)
@@ -602,6 +626,12 @@ impl GovernanceContract {
                 .ok_or(ContractError::ArithmeticOverflow)?,
             Vote::Abstain => proposal.votes_abstain = proposal.votes_abstain.checked_add(record.weight)
                 .ok_or(ContractError::ArithmeticOverflow)?,
+            Vote::Choice(idx) => {
+                let current = GovernanceStorage::choice_votes(&env, proposal_id, idx);
+                let updated = current.checked_add(record.weight)
+                    .ok_or(ContractError::ArithmeticOverflow)?;
+                GovernanceStorage::set_choice_votes(&env, proposal_id, idx, updated);
+            }
         }
 
         let old_vote = record.vote.clone();
@@ -745,15 +775,6 @@ impl GovernanceContract {
 
         env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
         GovernanceEvents::contract_upgraded(&env, &new_wasm_hash);
-        Ok(())
-    }
-
-    /// Upgrade the governance contract code. Admin only.
-    pub fn upgrade(env: Env, admin: Address, new_wasm_hash: BytesN<32>) -> Result<(), ContractError> {
-        admin.require_auth();
-        Self::assert_admin(&env, &admin)?;
-
-        env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
         GovernanceEvents::upgraded(&env, &new_wasm_hash);
         Ok(())
     }
@@ -780,6 +801,18 @@ impl GovernanceContract {
         let supply = TokenClient::new(&env, &token).total_supply();
         if new_quorum > supply {
             return Err(ContractError::QuorumExceedsSupply);
+        }
+
+        // Quorum floor check (issue #53)
+        let min_quorum_bps = GovernanceStorage::min_quorum_bps(&env);
+        if min_quorum_bps > 0 {
+            let floor = supply
+                .checked_mul(min_quorum_bps as i128)
+                .and_then(|v| v.checked_div(10_000))
+                .ok_or(ContractError::ArithmeticOverflow)?;
+            if new_quorum < floor {
+                return Err(ContractError::QuorumBelowFloor);
+            }
         }
 
         let mut proposal = GovernanceStorage::proposal(&env, proposal_id)
@@ -829,7 +862,7 @@ impl GovernanceContract {
         }
 
         GovernanceStorage::set_pending_admin(&env, Some(&new_admin));
-        GovernanceEvents::admin_transfer_proposed(&env, &admin, &new_admin);
+        GovernanceEvents::admin_transfer_proposed(&env, &admin, &new_admin, env.ledger().timestamp());
         Ok(())
     }
 
@@ -868,7 +901,7 @@ impl GovernanceContract {
         let previous_admin = GovernanceStorage::admin(&env);
         GovernanceStorage::set_admin(&env, &pending_admin);
         GovernanceStorage::set_pending_admin(&env, None);
-        GovernanceEvents::admin_transfer_accepted(&env, &previous_admin, &pending_admin);
+        GovernanceEvents::admin_transfer_accepted(&env, &previous_admin, &pending_admin, env.ledger().timestamp());
         Ok(())
     }
 

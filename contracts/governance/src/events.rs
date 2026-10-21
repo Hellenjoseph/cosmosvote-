@@ -96,17 +96,33 @@ impl GovernanceEvents {
         );
     }
 
-    pub fn admin_transfer_proposed(env: &Env, current_admin: &Address, pending_admin: &Address) {
+    /// Emitted when the current admin nominates a pending admin via `propose_admin`.
+    /// Payload: `(current_admin, pending_admin, ledger_timestamp)`.
+    /// The ledger timestamp lets off-chain monitors order and correlate the
+    /// two-step transfer without relying on ledger sequence alone.
+    pub fn admin_transfer_proposed(
+        env: &Env,
+        current_admin: &Address,
+        pending_admin: &Address,
+        timestamp: u64,
+    ) {
         env.events().publish(
             (symbol_short!("gov"), symbol_short!("propose")),
-            (current_admin.clone(), pending_admin.clone()),
+            (current_admin.clone(), pending_admin.clone(), timestamp),
         );
     }
 
-    pub fn admin_transfer_accepted(env: &Env, previous_admin: &Address, new_admin: &Address) {
+    /// Emitted when the pending admin calls `accept_admin` and the transfer completes.
+    /// Payload: `(previous_admin, new_admin, ledger_timestamp)`.
+    pub fn admin_transfer_accepted(
+        env: &Env,
+        previous_admin: &Address,
+        new_admin: &Address,
+        timestamp: u64,
+    ) {
         env.events().publish(
             (symbol_short!("gov"), symbol_short!("accept")),
-            (previous_admin.clone(), new_admin.clone()),
+            (previous_admin.clone(), new_admin.clone(), timestamp),
         );
     }
 
@@ -182,6 +198,27 @@ impl GovernanceEvents {
         env.events().publish(
             (symbol_short!("gov"), symbol_short!("conc_alt")),
             (proposal_id, voter.clone(), voter_weight, total_supply, threshold_bps),
+        );
+    }
+
+    pub fn min_balance_updated(env: &Env, admin: &Address, old_value: i128, new_value: i128) {
+        env.events().publish(
+            (symbol_short!("gov"), symbol_short!("min_bal")),
+            (admin.clone(), old_value, new_value),
+        );
+    }
+
+    pub fn cooldown_updated(env: &Env, admin: &Address, old_value: u64, new_value: u64) {
+        env.events().publish(
+            (symbol_short!("gov"), symbol_short!("cooldown")),
+            (admin.clone(), old_value, new_value),
+        );
+    }
+
+    pub fn restrict_admin_vote_updated(env: &Env, admin: &Address, old_value: bool, new_value: bool) {
+        env.events().publish(
+            (symbol_short!("gov"), symbol_short!("rest_vote")),
+            (admin.clone(), old_value, new_value),
         );
     }
 }
