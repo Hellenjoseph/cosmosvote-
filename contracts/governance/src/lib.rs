@@ -761,7 +761,7 @@ impl GovernanceContract {
         if active_count > 0 {
             GovernanceStorage::set_active_proposal_count(&env, active_count - 1);
         }
-        GovernanceEvents::proposal_cancelled(&env, proposal_id, &admin, proposal.voter_count);
+        GovernanceEvents::proposal_cancelled(&env, proposal_id, &admin, proposal.voter_count, &reason);
         Ok(())
     }
 

@@ -152,11 +152,13 @@ Emitted when the admin cancels an active proposal.
 |-------|------------|------|-------------|
 | proposal_id | 0 | u64 | Cancelled proposal ID |
 | admin | 1 | Address | Admin that cancelled |
+| voter_count | 2 | u32 | Number of votes cast at time of cancellation |
+| reason | 3 | String | Cancellation reason (empty string if none provided) |
 
 ```json
 {
   "topics": ["gov", "cancel"],
-  "data": [1, "GABC...ADMIN"]
+  "data": [1, "GABC...ADMIN", 42, "Duplicate proposal"]
 }
 ```
 
@@ -460,7 +462,7 @@ Emitted when the token admin is changed.
 | gov | vote_cast | `gov`, `voted` | proposal_id, voter, vote, weight |
 | gov | proposal_finalized | `gov`, `final` | proposal_id, state |
 | gov | proposal_executed | `gov`, `exec` | proposal_id, admin |
-| gov | proposal_cancelled | `gov`, `cancel` | proposal_id, admin |
+| gov | proposal_cancelled | `gov`, `cancel` | proposal_id, admin, voter_count, reason |
 | gov | quorum_updated | `gov`, `quorum` | proposal_id, old_quorum, new_quorum |
 | gov | admin_transfer_proposed | `gov`, `propose` | current_admin, pending_admin, timestamp |
 | gov | admin_transfer_accepted | `gov`, `accept` | previous_admin, new_admin, timestamp |
