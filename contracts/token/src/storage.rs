@@ -173,24 +173,6 @@ impl TokenStorage {
             .extend_ttl(&key, Self::SNAPSHOT_TTL_THRESHOLD, Self::SNAPSHOT_TTL_LEDGERS);
     }
 
-    /// Read the balance snapshot for `owner` at `ledger`.
-    ///
-    /// Returns `None` if no snapshot exists for that ledger (either it was never
-    /// written or the Temporary entry has expired).
-    pub fn balance_snapshot(env: &Env, owner: &Address, ledger: u32) -> Option<i128> {
-        let key = TempKey::BalanceSnapshot(owner.clone(), ledger);
-        if let Some(amount) = env.storage().temporary().get::<TempKey, i128>(&key) {
-            // Refresh TTL on access so frequently-queried snapshots stay alive
-            // for the remainder of the proposal window.
-            env.storage()
-                .temporary()
-                .extend_ttl(&key, Self::SNAPSHOT_TTL_THRESHOLD, Self::SNAPSHOT_TTL_LEDGERS);
-            Some(amount)
-        } else {
-            None
-        }
-    }
-
     pub fn allowance(env: &Env, owner: &Address, spender: &Address) -> i128 {
         Self::allowance_record(env, owner, spender)
             .map(|data| data.amount)
