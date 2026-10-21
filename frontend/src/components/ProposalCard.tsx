@@ -1,11 +1,4 @@
-/**
- * ProposalCard – renders a single governance proposal in the list.
- *
- * Issue #30: Added 'Copy link' button that copies a URL containing the
- * proposal ID (?proposal=<id>) to the clipboard and shows a 2-second toast.
- */
-
-import { useState, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import type { Proposal, ProposalState } from '../types';
 import { formatTokenAmount } from '../utils';
 import styles from './ProposalCard.module.css';
@@ -37,45 +30,63 @@ function quorumPct(p: Proposal): number {
   return Math.min(100, Number((totalVotes(p) * 100n) / p.quorum));
 }
 
-/** Build a shareable URL for the given proposal ID. */
-function buildProposalUrl(id: bigint | number): string {
-  const base = window.location.origin + window.location.pathname;
-  return `${base}?proposal=${String(id)}`;
+/**
+ * Returns a human-readable countdown string for the given Unix timestamp (seconds).
+ * Returns null if the timestamp is in the past (i.e. voting has ended).
+ */
+function getCountdown(endTimeSec: bigint): string | null {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const diffSec = Number(endTimeSec) - nowSec;
+  if (diffSec <= 0) return null;
+
+  const days = Math.floor(diffSec / 86400);
+  const hours = Math.floor((diffSec % 86400) / 3600);
+  const minutes = Math.floor((diffSec % 3600) / 60);
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (days === 0) parts.push(`${minutes}m`); // show minutes only when < 1 day
+  return parts.join(' ') + ' remaining';
 }
 
-// ── Inline mini-toast (auto-hides after 2 s) ──────────────────────────────────
+/**
+ * CountdownTimer renders a live countdown for Active proposals.
+ * Updates every 60 seconds and announces time remaining to screen readers via aria-live.
+ */
+function CountdownTimer({ endTime }: { endTime: bigint }) {
+  const [countdown, setCountdown] = useState<string | null>(() => getCountdown(endTime));
 
-interface CopyToastProps {
-  visible: boolean;
-}
+  useEffect(() => {
+    // Refresh immediately on mount, then every 60 s
+    const tick = () => setCountdown(getCountdown(endTime));
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [endTime]);
 
-function CopyToast({ visible }: CopyToastProps) {
-  if (!visible) return null;
+  if (countdown === null) {
+    return (
+      <span
+        aria-live="polite"
+        aria-label="Voting ended"
+        style={{ color: 'var(--color-state-rejected, #dc2626)', fontWeight: 600 }}
+      >
+        Voting ended
+      </span>
+    );
+  }
+
   return (
     <span
-      role="status"
       aria-live="polite"
-      style={{
-        position: 'absolute',
-        bottom: '100%',
-        right: 0,
-        marginBottom: 6,
-        background: '#1e293b',
-        color: '#f1f5f9',
-        borderRadius: 6,
-        padding: '4px 10px',
-        fontSize: '0.75rem',
-        whiteSpace: 'nowrap',
-        pointerEvents: 'none',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-      }}
+      aria-label={`Time remaining: ${countdown}`}
+      title={`Voting ends ${formatDate(endTime)}`}
     >
-      ✅ Link copied!
+      ⏱ {countdown}
     </span>
   );
 }
-
-// ── Component ────────────────────────────────────────────────────────────────
 
 export function ProposalCard({ proposal: p, decimals, onClick }: Props) {
   const color = STATE_COLORS[p.state];
@@ -201,7 +212,12 @@ export function ProposalCard({ proposal: p, decimals, onClick }: Props) {
       </p>
 
       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-        Ends {formatDate(p.end_time)} · Quorum {formatTokenAmount(p.quorum, decimals)}
+        {p.state === 'Active' ? (
+          <CountdownTimer endTime={p.end_time} />
+        ) : (
+          <>Ended {formatDate(p.end_time)}</>
+        )}
+        {' '}· Quorum {formatTokenAmount(p.quorum, decimals)}
       </div>
 
       {/* Quorum progress bar */}
@@ -223,4 +239,3 @@ export function ProposalCard({ proposal: p, decimals, onClick }: Props) {
     </article>
   );
 }
-// .
